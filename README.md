@@ -1,4 +1,5 @@
-# CSE6242-Project
-This is our final project for CSE 6242: Data and Visual Analytics
+This is a front-end part of project deliverable for CSE 6242: Data and Visual Analytics at Georgia Institute of Technology. 
 
-Member: Xiaofan Liang
+#Contributor
+*front-end: Uijeong Hwang and Xiaofan Liang
+*back-end: Yifeng Wang and Varun Vangala
