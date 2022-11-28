@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Social Diversity Map</title>
+    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Muli" />
+</head>
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.5.1/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.5.1/mapbox-gl.js"></script>
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="./lib/nice_select2/js/nice-select2.js"></script>
+<script src="//d3js.org/topojson.v1.min.js"></script>
+<link rel="stylesheet" href="./lib/nice_select2/css/nice-select2.css" />
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      z-index: 0
+    }
+    #top-left-corner {
+      background: rgba(0, 0, 0, 0);
+      position: absolute;
+      left: 0;
+      top:0;
+      padding: 15px;
+      width: 600px;
+      z-index: 7;
+      text-shadow: 3px 3px 3px #000000;
+    }
+    div.tooltip {
+        color: white;
+        position: absolute;
+        text-align: left;
+        width: 250px;
+        height: 200px;
+        padding: 2px;
+        font: 13px sans-serif;
+        background: rgba(20,20,20, 0.9);
+        border: 2px;
+        border-radius: 10px;
+        pointer-events: none;
+        z-index: 4;
+        line-height: 1;
+    }
+    #info {
+        background: rgba(0, 0, 0, 0.8);
+        position: absolute;
+        right: 0;
+        top:0;
+        bottom: 0;
+        padding: 15px;
+        width: 530px;
+        z-index: 5;
+    }
+    input[type=checkbox] {
+      transform: scale(1.4);
+    }
+
+    .button {
+        font-size: 20px;
+        padding: 8px;
+        color: #fff;
+        border-radius: 5px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.3s ease-out;
+        z-index: 6;
+        font-family: monospace;
+        margin-right: 20px;
+    }
+    .button:hover {
+        background: #2196f3;
+    }
+
+    .overlay {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.7);
+        transition: opacity 500ms;
+        visibility: hidden;
+        opacity: 0;
+        z-index: 6
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 70px auto;
+        padding: 20px;
+        background: #fff;
+        border-radius: 5px;
+        width: 30%;
+        position: relative;
+        transition: all 5s ease-in-out;
+        z-index: 6;
+    }
+
+    .popup h2 {
+        margin-top: 0;
+        color: #333;
+        font-family: Tahoma, Arial, sans-serif;
+    }
+    .popup .close {
+        position: absolute;
+        top: 20px;
+        right: 30px;
+        transition: all 200ms;
+        font-size: 30px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #333;
+    }
+    .popup .close:hover {
+        color: #06D85F;
+    }
+    .popup .content {
+        max-height: 90%;
+        overflow: auto;
+    }
+
+    @media screen and (max-width: 700px){
+        .box{
+            width: 90%;
+        }
+        .popup{
+            width: 90%;
+        }
+    }
+
+    #category {
+        margin-top: 5px;
+    }
+
+    .tooltipClose {
+        position: absolute;
+        top: 1px;
+        right: 5px;
+        transition: all 200ms;
+        font-size: 20px;
+        font-weight: bold;
+        text-decoration: none;
+        color: white;
+    }
+
+</style>
+<body>
+    <div id="map"></div>
+    <div id="top-left-corner">
+      <select id="filter"></select>
+      <div id="category"></div>
+      <div id="checkBoxDiv">
+          <input type="checkbox" id="myCheckbox"></div>
+    </div>
+    <div id="info">
+        <div id="introduction"></div>
+        <div id="intro_box">
+            <a class="button" href="#popup1">About</a>
+            <a class="button" href="#popup2">Methods</a>
+            <a class="button" href="#popup3">Data</a>
+        </div>
+        <div id="popup1" class="overlay">
+            <div class="popup">
+                <h2>What is Place Social Diversity Explorer</h2>
+                <a class="close" href="#">&times;</a>
+                <div class="content">
+                    Explore the income and racial diversity of places in Atlanta! A place is more diverse if the visitors to a place come from neighborhoods with various income and racial backgrounds. A dot in the map represents a place and the color represents social diversity.
+                </div>
+            </div>
+        </div>
+        <div id="popup2" class="overlay">
+            <div class="popup">
+                <h2>How is Social Diversity Score Calculated?</h2>
+                <a class="close" href="#">&times;</a>
+                <div class="content">
+                    We calculate income or racial diversity score through the same methods. First, we estimate the race or income composition of visitors at each POI by the average of the compositions in their origin block groups. Second, we calculate the income or racial diversity score as the sum of deviations from the city average. More details to come. http://friendlycities.gatech.edu/projects/estimating-diversity-at-points-of-interest-pois-in-atlanta-georgia-using-origin-destination-trip-data/.
+                </div>
+            </div>
+        </div>
+        <div id="popup3" class="overlay">
+            <div class="popup">
+                <h2>Where do Data Come From?</h2>
+                <a class="close" href="#">&times;</a>
+                <div class="content">
+                    The visitor data of places come from SafeGraph, which provides POI data for researchers for free. SafeGraph's visitor data of each POI come from mobile phone GPS trajectories. Researchers have estimated that SafeGraph data represent roughly 10% of the total population. Therefore, the absolute count of visitors and the visitors' block groups are limited by data availability. The origin of the visitors are aggregated on the census block group level. We refer to census block groups as neighborhoods in our dashboard. The demographic data (income and race) for each block group comes from ACS Census.
+                </div>
+            </div>
+        </div>
+        <div id="pid_prd"></div>
+        <div id="income_race"></div>
+        <div id="recommendation"></div>
+        </div>
+    </div>
+    <script>
+
+    ///////////UTILS/////////
+    function wrap(text, width) {
+        text.each(function() {
+            var text = d3.select(this),
+                words = text
+                    .text()
+                    .split(/\s+/)
+                    .reverse(),
+                word,
+                line = [],
+                lineNumber = 0,
+                lineHeight = 1.1, // ems
+                y = text.attr("y"),
+                dy = parseFloat(text.attr("dy"));
+            tspan = text
+                .text(null)
+                .append("tspan")
+                .attr("x", 0)
+                .attr("y", y)
+                .attr("dy", dy + "em");
+            while ((word = words.pop())) {
+                line.push(word);
+                tspan.text(line.join(" "));
+                if (tspan.node().getComputedTextLength() > width) {
+                    line.pop();
+                    tspan.text(line.join(" "));
+                    line = [word];
+                    tspan = text
+                        .append("tspan")
+                        .attr("x", 0)
+                        .attr("y", y)
+                        .attr("dy", ++lineNumber * lineHeight + dy + "em")
+                        .text(word);
+                }
+            }
+        });
+    }
+    ///////////////////////////////////////
+
+    d3.select('map')
+      .attr("width", window.innerWidth)
+      .attr("height", window.innerHeight);
+
+    mapboxgl.accessToken = 'pk.eyJ1IjoieHhmZmxsIiwiYSI6ImNrOTkzeWdpaDBya2QzbHF4b2lrdWJsdTkifQ.yScYDn4ssO0b9h1mRYzEhA';
+    var map = new mapboxgl.Map({
+		container: 'map', // container ID
+		style: 'mapbox://styles/mapbox/dark-v10', // style URL //dark-v10
+		center: [-84.389340, 33.748925], // starting position [lng, lat]
+		zoom: 12 // starting zoom
+    });
+
+    var info_width = 530;
+    var panel_margin = {top: 40, right: 40, bottom: 40, left: 47},
+        w = info_width - panel_margin.left - panel_margin.right,
+        intro_h = 50,
+        toggle_h = 50,
+        recommend_h = 100,
+        all_margins = 15+10+20, //all kinds of random margins; 15 -> intro_box, 10-> pid_prd_plot
+        plot_h = (window.innerHeight - intro_h - toggle_h * 1 - recommend_h - all_margins)/2 - panel_margin.top - panel_margin.bottom,
+        //h = (window.innerHeight)/3 - panel_margin.top - panel_margin.bottom;
+        text_h = 60; //adjust distance between plot texts and plot
+
+    // create svg in each div
+    var heading_font = 'monospace';
+    var text_font = 'Muli';
+
+    var introduction_svg = d3.select('#introduction').append("svg")
+        .attr('id', 'introduction-svg')
+        .attr('width', w + panel_margin.left + panel_margin.right)
+        .attr('height', intro_h)
+        .append("g")
+        .attr("transform",
+            "translate(" + panel_margin.left + "," + panel_margin.top + ")");
+
+    var pid_prd_svg = d3.select('#pid_prd').append("svg")
+        .attr('id', 'pid-prd-plot')
+        .attr('width', w + panel_margin.left + panel_margin.right)
+        .attr('height', plot_h + panel_margin.top + panel_margin.bottom)
+        .append("g")
+        .attr("transform",
+            "translate(" + panel_margin.left + "," + panel_margin.top + ")");
+
+    var income_race_svg = d3.select('#income_race').append("svg")
+        // .style("top", intro_h + toggle_h*3 + plot_h + panel_margin.top + 15 + 35 + 'px')
+        .attr('id', 'income-race-plot')
+        .attr('width', w + panel_margin.left + panel_margin.right)
+        .attr('height', plot_h + panel_margin.top + panel_margin.bottom)
+        .append("g")
+        .attr("transform",
+            "translate(" + panel_margin.left + "," + panel_margin.top + ")");
+
+    var recommend = d3.select('#recommendation').append("svg")
+        .attr('id', 'recommend')
+        .attr('width', w + panel_margin.left + panel_margin.right)
+        .attr('height', recommend_h)
+        .append("g")
+        .attr("transform",
+            "translate(" + panel_margin.left + "," + panel_margin.top + ")")
+
+    // put titles for each plot
+
+    introduction_svg.append("text")
+        .attr("id", "heading")
+        .attr("fill", "white")
+        .attr("font-size", 25)
+        .attr("transform", "translate(" + 0 + ","+ -10 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', heading_font)
+        .text("PLACE SOCIAL DIVERSITY EXPLORER");
+
+    d3.select('#intro_box')
+        .style("margin-left", '15px')
+        .style("text-align", 'center')
+        .style("height", toggle_h + 'px')
+        .style("width", w + panel_margin.left + panel_margin.right + 'px')
+
+    d3.select("#checkBoxDiv")
+        .style('position', 'absolute')
+        .style('margin-left', '18px')
+        .style("line-height", toggle_h + 15 + 'px')
+        .style("text-align", 'left')
+        .style('size', 40)
+        .append("text")
+        .style("text-anchor", "left")
+        .style("color", "white")
+        .style("font-size", '16px')
+        .style('font-family', text_font)
+        .style('font-weight', 500)
+        .text(" Check to See Where Visitors Come From");
+
+    d3.select("#category").append("text")
+      .style("color", "white")
+      .style("font-size", '16px')
+      .style("text-anchor", "left")
+      .style('font-family', text_font)
+      .style('font-weight', 500)
+      .text("Filter Places by Category");
+
+    pid_prd_svg.append("text")
+        .attr("id", "plot_title")
+        .attr("fill", "white")
+        .attr("font-size", 16)
+        .attr("transform", "translate(" + 60 + ","+ -15 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .attr('font-weight', 600)
+        .text("Income & Racial Diversity of All Places");
+
+    pid_prd_svg.append("text")
+        .attr("id", "subtext")
+        .attr("fill", "#d4d4d4")
+        .attr("font-size", 12)
+        .attr("transform", "translate(" + 70 + ","+ 0 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .text("(Click on a place in the map to see the effects)");
+
+    income_race_svg.append("text")
+        .attr("id", "plot_title")
+        .attr("fill", "white")
+        .attr("font-size", 16)
+        .attr("transform", "translate(" + 10 + ","+ -15 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .attr('font-weight', 600)
+        .text("Income & White Population by Visitors' Neighborhoods");
+
+    income_race_svg.append("text")
+        .attr("id", "subtext2")
+        .attr("fill", "#d4d4d4")
+        .attr("font-size", 12)
+        .attr("transform", "translate(" + 70 + ","+ 0 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .text("(Click on a place in the map to see the effects)");
+
+    pid_prd_svg.append("text")
+        .attr("fill", "#d4d4d4")
+        .attr("font-size", 12)
+        .attr("transform", "translate(" + -15 + ","+ 25 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .text("The selected place's income diversity score is ______ (_______________ in Atlanta)");
+
+    pid_prd_svg.append("text")
+        .attr("fill", "#d4d4d4")
+        .attr("font-size", 12)
+        .attr("transform", "translate(" + -15 + ","+ 45 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .text("The selected place's racial diversity score is _______ (_______________ in Atlanta)");
+
+    income_race_svg.append("text")
+        .attr("fill", "#d4d4d4")
+        .attr("font-size", 12)
+        .attr("transform", "translate(" + -30 + ","+ 25 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .text("The selected place's neighborhood has ______________ income & ______ white population");
+
+    income_race_svg.append("text")
+        .attr("fill", "#d4d4d4")
+        .attr("font-size", 12)
+        .attr("transform", "translate(" + -30 + ","+ 45 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .text("Visitors are from neighborhoods with (avg) __________ income & ______ white population");
+
+    recommend.append("text")
+        .attr("fill", "white")
+        .attr("font-size", 16)
+        .attr("transform", "translate(" + 15 + ","+ 0 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .attr('font-weight', 600)
+        .text("The Visitors Who Visited this Place Also Like to Visit:");
+
+    recommend.append("text")
+        .attr("fill", "#d4d4d4")
+        .attr("font-size", 16)
+        .attr("transform", "translate(" + 0 + ","+ 35 +")")
+        .style("text-anchor", "left")
+        .attr('font-family', text_font)
+        .text("________________________________________________________");
+
+    // Projection method:
+    // Project geojson coordinate to the map's current state
+    function project(d) {
+        return map.project(new mapboxgl.LngLat(d.geometry.coordinates[0], d.geometry.coordinates[1]));
+    }
+
+    var container = map.getCanvasContainer();
+    var svg = d3.select(container)
+        .append("svg")
+        .attr("width", "100%")
+        .attr("height", "2000")
+        .style("position", "absolute")
+        .style("z-index", 1);
+
+    Promise.all([
+        d3.json("data/visit_od_atl_2019_3456_uniquePOI_join.geojson"),
+        d3.dsv(",", "data/visit_od_atl_2019_3456.csv", function (d) {
+            return {
+                poi_id: d['poi_id'],
+                poi_cbg: d['poi_cbg'],
+                home_cbg: d['visitor_home_cbg'],
+                dist: +d['bg_atl_dist'],
+            }}),
+        d3.dsv(",", "data/visit_od_atl_2019_3456_uniquePOI_join.csv", function (d) {
+            return {
+                poi_id: d['poi_id'],
+                poi_cbg: d['poi_cbg'],
+                count: +d['count_sum'],
+                income_poi: +d['med_income_poi'],  // unique by bg
+                white_poi: +d['white_poi'],        // unique by poi
+                white_home: +d['white_home'],      // unique by bg
+                category: d['new_cate'],
+                count: +d['count'],
+                pid: +(d['PID']) * 100,
+                prd: +(d['PRD']) * 100,
+                pid_percent: +d['PID_percentile'],
+                prd_percent: +d['PRD_percentile'],
+                avg_dist: +d['bg_atl_dist_mean']
+            }
+        }),
+        d3.json("data/bg_atl_socio.geojson"),
+        d3.dsv(",", "data/share_weighted_recommendation.csv")
+    ]).then(function(data) {
+        ready(data[0].features, data[1], data[2], data[3], data[4])
+    });
+
+    function ready(data0, data1, data2, data3, data4) {
+        var PID = data0.map(function(d) {return d.properties.PID});
+        var PRD = data0.map(function(d) {return d.properties.PRD});
+        PID.sort(function(a,b){return a-b}); //d3.quantile only works on sorted list
+        PRD.sort(function(a,b){return a-b});
+
+        var PID1 = d3.quantile(PID, 0);
+        var PID2 = d3.quantile(PID, 0.33);
+        var PID3 = d3.quantile(PID, 0.66);
+        var PID4 = d3.quantile(PID, 1);
+        var PRD1 = d3.quantile(PRD, 0);
+        var PRD2 = d3.quantile(PRD, 0.33);
+        var PRD3 = d3.quantile(PRD, 0.66);
+        var PRD4 = d3.quantile(PRD, 1);
+
+        var color = ['#f5f5f5', '#e0d6a2', '#c7af54', '#c7abdb', '#c7a99b', '#b08c4d', '#a978e3', '#8a5e76', '#705046'];
+        //var color = ['#FEF1E4', '#97D0E7', '#17AEE5', '#FAB186', '#B0988C', '#407B8F', '#F3742D', '#AB5F37', '#5C473D']; //blue orange
+        //var color = ['#5C473D', '#B0988C', '#FEF1E4', '#407B8F', '#17AEE5', '#AB5F37', '#F3742D', '#97D0E7', '#FAB186'];
+        //var color = ['#574249', '#AD9EA5', '#E8E8E8', '#627F8C', '#64ACBE', '#985356', '#C85A5A', '#B0D5DF', '#E4ACAC'];
+        var color2 = ['#85e6c9', '#ffffff', '#fcba03', '#ffffff'];
+
+        data0.forEach(function(d) {
+            if (d.properties.PID >= PID3 & d.properties.PID <= PID4 & d.properties.PRD >= PRD3 & d.properties.PRD < PRD4) {
+                d.properties.color = color[0]};
+            if (d.properties.PID >= PID2 & d.properties.PID < PID3 & d.properties.PRD >= PRD3 & d.properties.PRD <= PRD4) {
+                d.properties.color = color[1]};
+            if (d.properties.PID >= PID1 & d.properties.PID < PID2 & d.properties.PRD >= PRD3 & d.properties.PRD <= PRD4) {
+                d.properties.color = color[2]};
+            if (d.properties.PID >= PID3 & d.properties.PID <= PID4 & d.properties.PRD >= PRD2 & d.properties.PRD <= PRD3) {
+                d.properties.color = color[3]};
+            if (d.properties.PID >= PID2 & d.properties.PID < PID3 & d.properties.PRD >= PRD2 & d.properties.PRD < PRD3) {
+                d.properties.color = color[4]};
+            if (d.properties.PID >= PID1 & d.properties.PID < PID2 & d.properties.PRD >= PRD2 & d.properties.PRD < PRD3) {
+                d.properties.color = color[5]};
+            if (d.properties.PID >= PID3 & d.properties.PID <= PID4 & d.properties.PRD >= PRD1 & d.properties.PRD < PRD2) {
+                d.properties.color = color[6]};
+            if (d.properties.PID >= PID2 & d.properties.PID < PID3 & d.properties.PRD >= PRD1 & d.properties.PRD < PRD2) {
+                d.properties.color = color[7]};
+        	if (d.properties.PID >= PID1 & d.properties.PID < PID2 & d.properties.PRD >= PRD1 & d.properties.PRD < PRD2) {
+        		d.properties.color = color[8]};
+        });
+
+        // Checkbox Toggle Show Polygons
+        d3.select("#myCheckbox").property("checked", true)
+        d3.select("#myCheckbox").on("change", update);
+
+        var show_polygon = true;
+        function update() {
+            if(d3.select("#myCheckbox").property("checked")){
+                show_polygon = true; //need to be set before mouseover.
+            } else {
+                show_polygon = false; //need to be set before mouseover.
+            }
+        }
+
+        var Tooltip_click = d3.select("#map")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("border", "solid")
+            .style("border-width", "4px")
+            .style("opacity", 0);
+
+        var Tooltip_mouseover = d3.select("#map")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("border", "solid")
+            .style("border-width", "4px")
+            .style("opacity", 0);
+
+        var click = function(d) {
+            if (typeof big_dot != "undefined") {
+                big_dot
+                    .transition()
+                    .attr("r", 3)
+                    .style('stroke-width', 0);
+            }
+
+            first_click = 0
+            clicked = 1
+            clicked_plot = 1
+            Tooltip_mouseover.style('opacity', 0)
+            try{map.removeLayer('bg-fills-click')} catch(err) {}
+            try{map.removeSource('bg-origins-click')} catch(err) {}
+            try{map.removeLayer('bg-lines-click')} catch(err) {}
+            try{map.removeSource('bg-poi-click')} catch(err) {}
+
+            big_dot = d3.select(this)
+
+            Tooltip_click
+                .style("opacity", 1)
+                .style('color', d3.select(this).style('fill'))
+                .html(
+                    "<div>" +
+                    "<a class='tooltipClose' href='#'>&times;</a>" +
+                    "</div>" +
+                	"<br>" +
+                    "<font size='+1'; color='white'>" + "<center>" + "<b>" + d.properties.location_name + "</b>" + "</center>" + "</font>" + "<br>" +
+                    "<font color='white'>" + "<center>" + d.properties.top_category + "</font>" + "</center>" + "<br>" +
+                    "<center>" + "———————————————————" + "</center>" + "<br>" +
+                    "<font size='+0.5'; color='white'>" + "<li style='padding-left:10px'>" + "Number of Visitors: " +
+                    "<b>" + d.properties.n_visit + "</b>" + "</font>" + "<br>" + "<br>" +
+                    "<font size='+0.5'; color='white'>" + "<li style='padding-left:10px'>" + "Income Diversity Score: " +
+                    "<b>" + Math.round(Number((d.properties.PID).toFixed(2))*100, 1) + "</b>" + "</font>" + "<br>" + "<br>" +
+                    "<font size='+0.5'; color='white'>" + "<li style='padding-left:10px'>" + "Racial Diversity Score: " +
+                    "<b>" + Math.round(Number((d.properties.PRD).toFixed(2))*100, 1) + "</b>" + "</font>")
+                .style("left", (d3.mouse(this)[0]+10) + "px")
+                .style("top", (d3.mouse(this)[1]) + "px")
+
+            this_point = d
+
+            d3.select(this)
+                .transition()
+                .attr("r", 10)
+                .style('stroke-width', 2);
+
+            d3.event.stopPropagation()
+
+            // highlighting origin block groups
+            d3.select(this)
+                .transition()
+                .attr("r", 10);
+
+            d3.selectAll('#highlight').remove()
+            Highlight_poi(d.properties.poi_id);
+
+            if (show_polygon) {
+                var selected_poi_id = d.properties.poi_id;
+                var selected_poi_bg = data3.features.filter(function(dd) {
+                    return dd.properties.GEOID === d.properties.poi_cbg});
+
+                var selected_poi_bg = {type: 'FeatureCollection', features: selected_poi_bg};
+
+                var selected_visitors_id = data1.filter(function(d) {
+                    return(d.poi_id === selected_poi_id)}).map (function(d) {return d.home_cbg});
+                var selected_visitors_bg = data3.features.filter(function(d) {
+                    return selected_visitors_id.includes(d.properties.GEOID.toFixed(0))});
+                var selected_visitors_bg = {type: 'FeatureCollection', features: selected_visitors_bg};
+
+                map.addSource('bg-origins-click', { type: 'geojson', data: selected_visitors_bg });
+                map.addLayer({
+                    'id': 'bg-fills-click',
+                    'type': 'fill',
+                    'source': 'bg-origins-click',
+                    "paint": {
+                        'fill-color': 'white',
+                        'fill-opacity': 0.5
+                    }
+                });
+                map.addSource('bg-poi-click', { type: 'geojson', data: selected_poi_bg });
+                map.addLayer({
+                    'id': 'bg-lines-click',
+                    'type': 'line',
+                    'source': 'bg-poi-click',
+                    'paint': {
+                        'line-width': 2,
+                        'line-color': color2[0],
+                    }
+                });
+            }
+        };
+
+        var mouseover = function(d) {
+            Tooltip_mouseover
+                .style("opacity", 1)
+                .style('color', d3.select(this).style('fill'))
+                .html(
+                    "<div>" +
+                    "<a class='tooltipClose' href='#'>&times;</a>" +
+                    "</div>" +
+                	"<br>" +
+                    "<font size='+1'; color='white'>" + "<center>" + "<b>" + d.properties.location_name + "</b>" + "</center>" + "</font>" + "<br>" +
+                    "<font color='white'>" + "<center>" + d.properties.top_category + "</font>" + "</center>" + "<br>" +
+                    "<center>" + "———————————————————" + "</center>" + "<br>" +
+                    "<font size='+0.5'; color='white'>" + "<li style='padding-left:10px'>" + "Number of Visitors: " +
+                    "<b>" + d.properties.n_visit + "</b>" + "</font>" + "<br>" + "<br>" +
+                    "<font size='+0.5'; color='white'>" + "<li style='padding-left:10px'>" + "Income Diversity Score: " +
+                    "<b>" + Math.round(Number((d.properties.PID).toFixed(2))*100, 1) + "</b>" + "</font>" + "<br>" + "<br>" +
+                    "<font size='+0.5'; color='white'>" + "<li style='padding-left:10px'>" + "Racial Diversity Score: " +
+                    "<b>" + Math.round(Number((d.properties.PRD).toFixed(2))*100, 1) + "</b>" + "</font>")
+                .style("left", (d3.mouse(this)[0]+10) + "px")
+                .style("top", (d3.mouse(this)[1]) + "px");
+
+            // highlighting origin block groups
+            d3.select(this)
+                .transition()
+                .attr("r", 10)
+                .style('stroke-width', 2);
+
+            if (clicked_plot == 0) {
+                Highlight_poi(d.properties.poi_id);
+            }
+            //Highlight_poi(d.properties.poi_id);
+
+            if (show_polygon) {
+                var selected_poi_id = d.properties.poi_id;
+                var selected_poi_bg = data3.features.filter(function(dd) {
+                    return dd.properties.GEOID === d.properties.poi_cbg});
+
+                var selected_poi_bg = {type: 'FeatureCollection', features: selected_poi_bg};
+
+                var selected_visitors_id = data1.filter(function(d) {
+                    return(d.poi_id === selected_poi_id)}).map (function(d) {return d.home_cbg});
+                var selected_visitors_bg = data3.features.filter(function(d) {
+                    return selected_visitors_id.includes(d.properties.GEOID.toFixed(0))});
+
+                var selected_visitors_bg = {type: 'FeatureCollection', features: selected_visitors_bg};
+
+                map.addSource('bg-origins', { type: 'geojson', data: selected_visitors_bg });
+                map.addLayer({
+                    'id': 'bg-fills',
+                    'type': 'fill',
+                    'source': 'bg-origins',
+                    "paint": {
+                        'fill-color': 'white',
+                        'fill-opacity': 0.5
+                    }
+                });
+
+                map.addSource('bg-poi', { type: 'geojson', data: selected_poi_bg });
+                map.addLayer({
+                    'id': 'bg-lines',
+                    'type': 'line',
+                    'source': 'bg-poi',
+                    'paint': {
+                        'line-width': 2,
+                        'line-color': color2[0],
+                    }
+                });
+            }
+        };
+
+        var mouseout = function(d) {
+            if (clicked == 0) {
+                d3.select(this)
+                    .transition()
+                    .attr("r", 3)
+                    .style('stroke-width', 0);
+            }
+
+            if (clicked_plot == 0) {
+                d3.selectAll('#highlight').remove()
+            }
+            clicked = 0
+            //d3.selectAll('#highlight').remove()
+
+            try{map.removeLayer('bg-fills')} catch(err) {}
+            try{map.removeSource('bg-origins')} catch(err) {}
+            try{map.removeLayer('bg-lines')} catch(err) {}
+            try{map.removeSource('bg-poi')} catch(err) {}
+
+            Tooltip_mouseover.style('opacity', 0)
+        };
+
+        d3.select('body').on('click', function(){
+            Tooltip_click.style('opacity', 0)
+            try{map.removeLayer('bg-fills-click')} catch(err) {}
+            try{map.removeSource('bg-origins-click')} catch(err) {}
+            try{map.removeLayer('bg-lines-click')} catch(err) {}
+            try{map.removeSource('bg-poi-click')} catch(err) {}
+
+            d3.selectAll('#highlight').remove()
+            clicked = 0
+            clicked_plot = 0
+
+            if (typeof big_dot != "undefined") {
+                big_dot
+                    .transition()
+                    .attr("r", 3)
+                    .style('stroke-width', 0);
+            }
+        });
+
+        // create dropdown
+        var unique = Array.from(new Set(data0.map(function(d){return d.properties.new_cate}))).sort();
+        unique.unshift('All&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
+        var selected_cat = 'All&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+        var dropdownChange = function() {
+            selected_cat = d3.select(this).property('value');
+            render()
+        };
+
+        // enter code to append the game options to the dropdown
+        var dropdown = d3.select("#filter")
+            .on("change", dropdownChange);
+
+        dropdown.selectAll("option")
+            .data(unique)
+            .enter()
+            .append("option")
+            .attr("value", function (d) { return d; })
+            .text(function (d) { return d; });
+
+        //Convert dropdown into nice looking css
+        NiceSelect.bind(document.getElementById("filter"));
+
+        function filterByCate(data, category) {
+        	if (category == 'All&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;') { return data }
+        	else {
+        		var output = data.filter(function(d){
+        			return d.properties.new_cate == category
+        		})
+              return output
+        	}
+        }
+
+        // Render method redraws circles
+        function render() {
+            svg
+            .selectAll("circle")
+            .data(filterByCate(data0, selected_cat))
+            .enter()
+            .append("circle")
+            .attr("r", 2)
+            .style("opcaity", 0.7)
+            .style("fill", function(d) {return d.properties.color})
+            .style("z-index", 3)
+            .style('stroke', '#000000')
+            .style('stroke-width', 0)
+            .on("click", click)
+            .on("mouseover", mouseover)
+            .on("mouseout", mouseout)
+            .attr("cx", function(d) {
+                return project(d).x;
+            })
+            .attr("cy", function(d) {
+                return project(d).y;
+            });
+
+            //dots
+            svg.selectAll('circle')
+            .data(filterByCate(data0, selected_cat))
+            .attr("cx", function(d) {
+                return project(d).x;
+            })
+            .attr("cy", function(d) {
+                return project(d).y;
+            });
+
+            svg
+              .selectAll("circle")
+              .data(filterByCate(data0, selected_cat))
+              .exit()
+              .remove()
+
+            if (first_click == 0) {
+                Tooltip_click
+                    .style('left', (project(this_point).x + 10) + 'px')
+                    .style('top', project(this_point).y + 'px')
+            }
+
+            if (first_click == 0) {
+                Tooltip_mouseover
+                    .style('left', (project(this_point).x + 10) + 'px')
+                    .style('top', project(this_point).y + 'px')
+            }
+
+            // //filter data2 as well
+            // data2 = filterByCate(data2, selected_cat)
+        }
+
+        first_click = 1;
+        clicked = 0;
+        clicked_plot = 0;
+        // Call render method, and whenever map changes
+        render();
+        map.on("viewreset", render);
+        map.on("move", render);
+        map.on("moveend", render);
+
+        // Create Bivariate Color Legend
+        var legend = svg.selectAll("#legend")
+            .data(color)
+            .enter()
+            .append("g")
+            .attr("id", "legend");
+
+        var margin = 80;
+        var rect_width = 18;
+        var legend_w = rect_width * 3;
+        var legend_x = margin + legend_w/2; //the center for rotation
+        var legend_y = window.innerHeight - margin - legend_w/2; //the center for rotation
+
+        legend.append("rect")
+            .attr("x", function(d, i) {
+                return rect_width*(i-(i%3))/3 + margin;
+            })
+            .attr("y", function(d, i) {
+                return legend_y - rect_width*(i%3);
+            })
+            .attr("width", rect_width)
+            .attr("height", rect_width)
+            .attr("transform", "rotate(135, " + legend_x + "," + legend_y + ")") // rotate based on the x, y center
+            .style("fill", function(d){return d});
+
+        //Draw arrows for the legend
+        var arrowPoints = [[0, 0], [0, 10], [10, 5]];
+        var line_start = [legend_x+6, legend_y+43]; //the numbers are tested to be bottom of legend.
+        var line_end = [legend_x+6, legend_y+43-70];
+
+        svg.append('defs')
+            .append('marker')
+            .attr('id', 'arrow')
+            .attr('viewBox', [0, 0, 10, 10])
+            .attr('refX', 5)
+            .attr('refY', 5)
+            .attr('markerWidth', 10)
+            .attr('markerHeight', 10)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', d3.line()(arrowPoints))
+            .attr('stroke', 'white')
+            .attr('fill', 'white');
+
+        // svg.append('path')
+		// 		.attr('d', d3.line()([line_start, line_end]))
+		// 		.attr('stroke', 'white')
+		// 		.attr('marker-end', 'url(#arrow)')
+		// 		.attr('fill', 'white')
+		// 		.attr('transform', 'translate(0, 10) rotate(-45,' + line_start[0] + ',' + line_start[1] + ')');
+
+        svg.append('path')
+            .attr('d', d3.line()([line_start, line_end]))
+            .attr('stroke', 'white')
+            .attr('marker-end', 'url(#arrow)')
+            .attr('fill', 'white')
+            .attr('transform', 'translate(0, 10) rotate(45,' + line_start[0] + ',' + line_start[1] + ')');
+
+        svg.append('text')
+            .attr('x', line_start[0]+20)
+            .attr('y', line_start[1]-5)
+            .attr('transform', 'translate(17, 17) rotate(-45,' + line_start[0] + ',' + line_start[1] + ')')
+            .attr('fill', 'white')
+            .attr('font-family', text_font)
+            .text('Race');
+
+        svg.append('text')
+            .attr('x', line_start[0]+10)
+            .attr('y', line_start[1]-5)
+            .attr('transform', 'translate(-60, -25) rotate(45,' + line_start[0] + ',' + line_start[1] + ')')
+            .attr('fill', 'white')
+            .attr('font-family', text_font)
+            .text('Income');
+
+        svg.append('text')
+            .attr('x', line_start[0]-35)
+            .attr('y', line_start[1]+25)
+            .attr('fill', 'white')
+            .attr('font-family', text_font)
+            .text('Low diversity');
+
+        svg.append('text')
+            .attr('x', line_end[0]-70)
+            .attr('y', line_end[1]+20)
+            .attr('fill', 'white')
+            .attr('font-family', text_font)
+            .text('High');
+
+        svg.append('text')
+            .attr('x', line_end[0]+47)
+            .attr('y', line_end[1]+20)
+            .attr('fill', 'white')
+            .attr('font-family', text_font)
+            .text('High');
+
+        //////////////////////////////////////////////////////////////////////////
+        ///////// SIDE BAR PART //////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+
+        // remove NaN in income field
+        data2 = data2.filter(function(d) {
+            if(isNaN(d.income_poi)){
+                return false;
+            }
+            d.income_poi = parseInt(d.income_poi, 10);
+            return true;
+        });
+
+        ////////////// density plot //////////////////
+        var x_pct = d3.scaleLinear()
+            .domain([0,100])
+            .range([0,w]);
+
+        var y_kde = d3.scaleLinear()
+            .domain([0, 0.02])
+            .range([plot_h, text_h]);
+
+        var kde = kernelDensityEstimator(kernelEpanechnikov(4), x_pct.ticks(100));
+        var density_pid = kde(data2.map (function(d) {return d.pid; }));
+        var density_prd = kde(data2.map (function(d) {return d.prd; }));
+
+        // gradient stroke -- PID & PRD
+        var defs = pid_prd_svg.append("defs");
+        var gradient_pid = defs.append("linearGradient")
+            .attr("id", "svgGradient_pid")
+            .attr("x1", "0%")
+            .attr("x2", "100%")
+            .attr("y1", "50%")
+            .attr("y2", "50%");
+
+        gradient_pid.append("stop")
+            .attr("class", "start")
+            .attr("offset", "0%")
+            .attr("stop-color", color[8])
+            .attr("stop-opacity", 1);
+
+        gradient_pid.append("stop")
+            .attr("class", "end")
+            .attr("offset", "100%")
+            .attr("stop-color", color[3])
+            .attr("stop-opacity", 1);
+
+        // gradient stroke -- PRD
+        var gradient_prd = defs.append("linearGradient")
+            .attr("id", "svgGradient_prd")
+            .attr("x1", "0%")
+            .attr("x2", "100%")
+            .attr("y1", "50%")
+            .attr("y2", "50%");
+
+        gradient_prd.append("stop")
+            .attr("class", "start")
+            .attr("offset", "0%")
+            .attr("stop-color", color[8])
+            .attr("stop-opacity", 1);
+
+        gradient_prd.append("stop")
+            .attr("class", "end")
+            .attr("offset", "100%")
+            .attr("stop-color", color[1])
+            .attr("stop-opacity", 1);
+
+        // ADD AXIS -- PID & PRD
+        pid_prd_svg.append("g")
+            .attr("transform", "translate(0," + plot_h + ")")
+            .call(d3.axisBottom(x_pct).tickFormat(d=> d))
+            .style("color", "white");
+
+        pid_prd_svg.append("g")
+            .call(d3.axisLeft(y_kde).tickValues([0, 0.01, 0.02]).tickFormat(d=> d*100 + '%'))
+            .style("color", "white");
+
+        pid_prd_svg.append("g")
+            .attr('id', 'x_axis_label')
+            .append('text')
+            .attr("transform", "translate(" + w/2 + " ," + (plot_h + 35) + ")")
+            .text("Place Social Diversity Score")
+            .attr("text-anchor", "middle")
+            .style("fill", "white")
+            .style('font-family', text_font)
+            .attr('font-size', '12px');
+
+        pid_prd_svg.append("g")
+            .attr('id', 'y_axis_label')
+            .append('text')
+            .attr("transform", "rotate(-90)")
+            .attr("x", -plot_h/2 - 25)
+            .attr("y", -36)
+            .text("Frequency")
+            .attr("text-anchor", "middle")
+            .style("fill", "white")
+            .style('font-family', text_font)
+            .attr('font-size', '12px');
+
+        // ADD LINE -- PID & PRD
+        pid_prd_svg.append("path")
+            .datum(density_pid)
+            .attr("fill", "none")
+            .attr("opacity", ".8")
+            .attr("stroke", "url(#svgGradient_pid)")
+            .attr("stroke-width", 5)
+            .attr("stroke-linejoin", "round")
+            .attr("d",  d3.line()
+                .curve(d3.curveBasis)
+                .x(function(d) { return x_pct(d[0]); })
+                .y(function(d) { return y_kde(d[1]); }));
+
+        pid_prd_svg.append("path")
+            .datum(density_prd)
+            .attr("fill", "none")
+            .attr("opacity", ".8")
+            .attr("stroke", "url(#svgGradient_prd)")
+            .attr("stroke-width", 5)
+            .attr("stroke-linejoin", "round")
+            .attr("d",  d3.line()
+                .curve(d3.curveBasis)
+                .x(function(d) { return x_pct(d[0]); })
+                .y(function(d) { return y_kde(d[1]); }));
+
+        var legend1 = pid_prd_svg.append("g")
+            .attr("id", "legend1")
+
+        legend1.append("rect")
+            .attr("x", w - 140)
+            .attr("y", plot_h - 40)
+            .attr('width', 40)
+            .attr('height', 5)
+            .style("fill", color[3])
+
+        legend1.append("text")
+            .attr("x", w - 95)
+            .attr("y", plot_h - 34)
+            .attr("fill", "white")
+            .attr("font-size", "10px")
+            .attr("font-family", text_font)
+            .attr("text-anchor", "left")
+            .text("Income Diversity")
+
+        legend1.append("rect")
+            .attr("x", w - 140)
+            .attr("y", plot_h - 20)
+            .attr('width', 40)
+            .attr('height', 5)
+            .style("fill", color[1])
+
+        legend1.append("text")
+            .attr("x", w - 95)
+            .attr("y", plot_h - 14)
+            .attr("fill", "white")
+            .attr("font-size", "10px")
+            .attr("font-family", text_font)
+            .attr("text-anchor", "left")
+            .text("Racial Diversity")
+
+        /////////// scatter plot ////////////
+        var x_income = d3.scaleLinear()
+            .domain([0,d3.max(data2, function(d){return d.income_poi})])
+            .range([0,w]);
+
+        var y_race = d3.scaleLinear()
+            .domain([0, 1])
+            .range([plot_h, text_h]);
+
+        // ADD AXIS -- INCOME & RACE
+        income_race_svg.append("g")
+            .attr("transform", "translate(0," + plot_h + ")")
+            .call(d3.axisBottom(x_income).tickValues([0, 25000, 50000, 100000, 150000, 250000]))
+            .style("color", "white");
+
+        income_race_svg.append("g")
+            .call(d3.axisLeft(y_race).tickValues([0, 0.25, 0.5, 0.75, 1]).tickFormat(d=> d*100+"%"))
+            .style("color", "white");
+
+        income_race_svg.append("g")
+            .attr('id', 'x_axis_label')
+            .append('text')
+            .attr("transform", "translate(" + w/2 + " ," + (plot_h + 35) + ")")
+            .text("Annual Household Income ($)")
+            .attr("text-anchor", "middle")
+            .style("fill", "white")
+            .style('font-family', text_font)
+            .attr('font-size', '12px');
+
+        income_race_svg.append("g")
+            .attr('id', 'y_axis_label')
+            .append('text')
+            .attr("transform", "rotate(-90)")
+            .attr("x", -plot_h/2 - 25)
+            .attr("y", -36)
+            .text("Proportion of White Population")
+            .attr("text-anchor", "middle")
+            .style("fill", "white")
+            .style('font-family', text_font)
+            .attr('font-size', '12px');
+
+        // ADD DOTS -- INCOME & RACE
+        income_race_svg.append("g")
+            .selectAll("rect")
+            .data(data2)
+            .enter()
+            .append("rect")
+            .attr("x", function(d) {return x_income(d.income_poi); })
+            .attr("y", function(d) {return y_race(d.white_poi); })
+            .attr("height", 1.5)
+            .attr("width", 1.5)
+            .style("fill", "grey");
+
+        // add legend
+        var legend2 = income_race_svg.append("g")
+            .attr("id", "legend2");
+
+        legend2.append("circle")
+            .attr("cx", w - 170)
+            .attr("cy", plot_h - 37)
+            .attr('r', 7)
+            .attr("fill", color2[1])
+            .attr('stroke', color2[0])
+            .attr('stroke-width', 3)
+
+        legend2.append("text")
+            .attr("x", w - 160)
+            .attr("y", plot_h - 33)
+            .attr("fill", "white")
+            .attr("font-size", "11px")
+            .attr("font-family", text_font)
+            .attr("text-anchor", "left")
+            .text("The Selected Place's Block Group");
+
+        legend2.append("circle")
+            .attr("cx", w - 170)
+            .attr("cy", plot_h - 17)
+            .attr('r', 5)
+            .attr("fill", color2[1])
+            .attr('stroke', 'black')
+
+        legend2.append("text")
+            .attr("x", w - 160)
+            .attr("y", plot_h - 14)
+            .attr("fill", "white")
+            .attr("font-size", "11px")
+            .attr("font-family", text_font)
+            .attr("text-anchor", "left")
+            .text("Visitors' Home Block Groups");
+
+
+
+
+        //////////////////////////////////////////////////////////////////////////
+        ///////// MOUSEOVER EFFECT ON SIDE BAR ///////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////
+
+        function Highlight_poi(selected_poi_id) {
+
+            ///////// highlight a specific POI /////////
+            // poi information
+            var selected_poi_info = data2.filter(function(d) {
+                return(d.poi_id === selected_poi_id)});
+
+            var f = d3.format(".0f");
+            var selected_prd = f(selected_poi_info.map (function(d) {return d.prd})[0]);
+            var selected_prd_percentile = f(selected_poi_info.map (function(d) {return d.prd_percent})[0]);
+            var selected_prd_density = density_prd[selected_prd];
+
+            var selected_pid = f(selected_poi_info.map (function(d) {return d.pid})[0]);
+            var selected_pid_percentile = f(selected_poi_info.map (function(d) {return d.pid_percent})[0]);
+            var selected_pid_density = density_pid[selected_pid];
+
+            var selected_income_poi = selected_poi_info.map (function(d) {return d.income_poi})[0];
+            var selected_white_poi = selected_poi_info.map (function(d) {return d.white_poi})[0];
+
+            // visitor information
+            var selected_visitors_id = data1.filter(function(d) {
+                    return(d.poi_id === selected_poi_id)})
+                .map (function(d) {return d.home_cbg});
+
+            var selected_visitors_info = data2.filter(function(d) {
+                return(d.poi_cbg === selected_visitors_id[0])});
+
+            var selected_income_white_home = [];
+            selected_visitors_id.forEach(function(id) {
+                if (data2.map (function(d) {return d.poi_cbg}).includes(id)) {
+                    temp = data2.filter(function(d) {
+                        return(d.poi_cbg === id)})[0];
+                    selected_income_white_home.push({income: temp['income_poi'], white: temp['white_home']})
+                }
+            });
+
+            var avg_income_home = selected_income_white_home.map (function(d) {return d.income});
+            var avg_white_home = selected_income_white_home.map (function(d) {return d.white});
+
+            // recommended POI
+            var recommended_poi_id = data4.filter(function(d) {
+                  return(d.poi_id === selected_poi_id)})
+              .map (function(d) {return d.rec_id});
+
+            var recommended_poi_info = data0.filter(function(d) {
+              return(d.properties.poi_id === recommended_poi_id[0])})
+              .map (function(d) {
+                return [d.properties.location_name,d.properties.top_category]});
+
+            ////// add the information on plots
+            // put values for each plot
+
+            function level(percentile) {
+            	if (percentile < 20) {
+            		return 'Very Low'
+                } else if (percentile > 20 & percentile <= 40) {
+            		return 'Low'
+                } else if (percentile > 40 & percentile <= 60) {
+                    return 'Medium'
+                } else if (percentile > 60 & percentile <= 80) {
+                    return 'High'
+                } else {
+            		return "Very High"
+                }
+            }
+
+            //The selected place's income diversity is ____, higher than ____ of all places.
+            pid_prd_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", color[3])
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 290 + ","+ 23 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text(level(selected_pid));
+
+            pid_prd_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", color[3])
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 244 + ","+ 23 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text(selected_pid);
+
+            pid_prd_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", color[1])
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 290 + ","+ 43 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text(level(selected_prd));
+
+            pid_prd_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", color[1])
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 244 + ","+ 43 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text(selected_prd);
+
+            var f2 = d3.format(",");
+            income_race_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", color2[0])
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 210 + ","+ 22 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text("$"+ f2(selected_income_poi));
+
+            income_race_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", color2[0])
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 332 + ","+ 22 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text(Math.round(selected_white_poi*100) + "%");
+
+            income_race_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", "white")
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 210 + ","+ 42 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text("$"+ f2(Math.round(d3.mean(avg_income_home),0)));
+
+            income_race_svg.append("text")
+                .attr("id", "highlight")
+                .attr("fill", "white")
+                .attr("font-size", 14)
+                .attr("transform", "translate(" + 332 + ","+ 42 +")")
+                .style("text-anchor", "left")
+                .attr('font-family', text_font)
+                .text(Math.round(d3.mean(avg_white_home)*100) + "%");
+
+
+
+            // PID
+            pid_prd_svg.append("rect")
+                .attr('id', 'highlight')
+                .attr("rx", 4)
+                .attr("ry", 4)
+                .attr('x', x_pct(selected_pid_density[0]))
+                .attr('y', y_kde(selected_pid_density[1])-15)
+                .attr('width', 6)
+                .attr('height', 30)
+                .attr('stroke', color2[3])
+                .attr('stroke-width', 2.5)
+                .attr('fill', color[6]);
+
+            // PRD
+            pid_prd_svg.append("rect")
+                .attr('id', 'highlight')
+                .attr("rx", 4)
+                .attr("ry", 4)
+                .attr('x', x_pct(selected_prd_density[0]))
+                .attr('y', y_kde(selected_prd_density[1])-15)
+                .attr('width', 6)
+                .attr('height', 30)
+                .attr('stroke', color2[3])
+                .attr('stroke-width', 2.5)
+                .attr('fill', color[2]);
+
+
+            // INCOME & RACE
+            income_race_svg.append("g")
+                .selectAll("dot")
+                .data(selected_income_white_home)
+                .enter()
+                .append("circle")
+                .attr('id', 'highlight')
+                .attr("cx", function(d) {return x_income(d.income)})
+                .attr("cy", function(d) {return y_race(d.white)})
+                .attr("r", 5)
+                .attr("fill", color2[1])
+                .attr('stroke', 'black')
+                .attr('stroke-width', 2)
+
+            income_race_svg.append("g")
+                .append("circle")
+                .attr('id', 'highlight')
+                .attr("cx", x_income(selected_income_poi))
+                .attr("cy", y_race(selected_white_poi))
+                .attr("r", 8)
+                .attr("fill", color2[1])
+                .attr('stroke', color2[0])
+                .attr('stroke-width', 2)
+
+
+
+            // The Visitors Who Visited this Place Also Like to Visit:
+            recommend.append("text")
+                .attr("id", "highlight")
+                .attr("fill", color2[2])
+                .attr("font-size", 16)
+                .attr("transform", "translate(" + 0 + ","+ 30 +")")
+                .style("text-anchor", "center")
+                .attr('font-family', text_font)
+                .text(recommended_poi_info[0][0] + '  (' + recommended_poi_info[0][1] + ')')
+                .attr('font-weight', 900);
+        }
+    }
+
+    // functions for density plot
+    function kernelDensityEstimator(kernel, X) {
+        return function(V) {
+            return X.map(function(x) {
+                return [x, d3.mean(V, function(v) { return kernel(x - v); })];
+            });
+        };
+    }
+
+    function kernelEpanechnikov(k) {
+        return function(v) {
+            return Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
+        };
+    }
+
+
+		//bivariate: https://observablehq.com/@d3/bivariate-choropleth?collection=@observablehq/maps
+    //Leaflet legend: http://arminakvn.github.io/leaflegend/
+
+</script>
+
+</body>
+</html>
